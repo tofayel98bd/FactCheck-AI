@@ -13,7 +13,7 @@ async def search_web(query: str, max_results: int = 5) -> List[SourceItem]:
     google_cx = os.getenv("GOOGLE_SEARCH_ENGINE_ID")
 
     # 1. Serper API
-    if serper_api_key:
+    if serper_api_key and not serper_api_key.startswith("your_"):
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.post(

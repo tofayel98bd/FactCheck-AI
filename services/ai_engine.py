@@ -14,8 +14,8 @@ async def analyze_claim_with_rag(claim: str, sources: List[SourceItem], language
 
     # Format search evidence for RAG context
     evidence_text = "\n".join([
-        f"- উৎস: {s.title}\n  ইউআরএল: {s.url}\n  সারাংশ: {s.snippet}"
-        for s.index, s in enumerate(sources, 1)
+        f"- উৎস {idx}: {s.title}\n  ইউআরএল: {s.url}\n  সারাংশ: {s.snippet}"
+        for idx, s in enumerate(sources, 1)
     ]) if sources else "কোন তথ্যসূত্র পাওয়া যায়নি।"
 
     prompt = f"""
@@ -41,7 +41,7 @@ async def analyze_claim_with_rag(claim: str, sources: List[SourceItem], language
     """
 
     # 1. Try Gemini API
-    if gemini_key:
+    if gemini_key and not gemini_key.startswith("your_"):
         try:
             async with httpx.AsyncClient() as client:
                 res = await client.post(
@@ -64,7 +64,7 @@ async def analyze_claim_with_rag(claim: str, sources: List[SourceItem], language
             print(f"[AI Engine Error] Gemini API failed: {e}")
 
     # 2. Try OpenAI API
-    if openai_key:
+    if openai_key and not openai_key.startswith("your_"):
         try:
             async with httpx.AsyncClient() as client:
                 res = await client.post(
