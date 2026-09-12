@@ -1,0 +1,58 @@
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=Noto+Sans+Bengali:wght@400;500;600&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+  background: #05060b;
+}
+
+body {
+  background: #05060b;
+  color: #edeff7;
+  font-feature-settings: "tnum" 1;
+}
+
+/* Frosted glass panel — the base surface used across the app */
+.glass {
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+/* Soft ambient aura behind the search console */
+.aura::before {
+  content: "";
+  position: absolute;
+  inset: -40% -10% auto -10%;
+  height: 480px;
+  background: radial-gradient(60% 60% at 30% 20%, rgba(77, 163, 255, 0.16), transparent 70%),
+    radial-gradient(50% 50% at 80% 30%, rgba(182, 120, 255, 0.14), transparent 70%);
+  filter: blur(40px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Faint grid texture for the page background */
+.grid-texture {
+  background-image: linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, black 40%, transparent 90%);
+}
+
+/* Hide scrollbar for the marquee row, keep it functional */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+textarea:focus,
+input:focus {
+  outline: none;
+}

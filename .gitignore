@@ -4,3 +4,15 @@ __pycache__/
 .idea
 proposal.txt
 guideline.txt
+
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# Environment Variables (API Keys)
+.env
+
+# Node/React
+frontend-react/node_modules/
+frontend-react/dist/
