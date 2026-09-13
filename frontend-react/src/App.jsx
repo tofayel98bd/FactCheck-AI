@@ -13,7 +13,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 
-const API_URL = "http://127.0.0.1:8000/api/verify-fact";
+const API_URL = "https://factcheck-ai-8xx6.onrender.com/api/verify-fact";
 
 const VERDICT_STYLES = {
   True: { label: "True", color: "#22E6A8", bg: "rgba(34,230,168,0.1)", Icon: ShieldCheck },
