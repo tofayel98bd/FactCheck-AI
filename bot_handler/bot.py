@@ -1,5 +1,6 @@
 import os
 import httpx
+import io
 from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
@@ -7,84 +8,89 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 # .env থেকে টোকেন লোড করা
 load_dotenv()
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-API_URL = os.getenv("API_URL", "http://127.0.0.1:8000/api/verify-fact")
+
+# ব্যাকএন্ডের দুটি আলাদা API URL
+API_URL_TEXT = "http://127.0.0.1:8000/api/verify-fact"
+API_URL_IMAGE = "http://127.0.0.1:8000/api/verify-image"
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    welcome_text = (
-        "🤖 *FactCheck AI-তে স্বাগতম!*\n\n"
-        "সংবাদের সত্যতা যাচাই করতে যেকোনো খবর, পোস্ট বা টেক্সট আমাকে পাঠান।\n"
-        "আমি রিয়েল-টাইমে অনলাইন সোর্স সার্চ করে প্রমাণের লিংক ও ট্রাস্ট স্কোরসহ আপনাকে ফ্যাক্ট-চেক রিপোর্ট প্রদান করব।"
-    )
-    await update.message.reply_text(welcome_text, parse_mode="Markdown")
+    await update.message.reply_text("FactCheck AI-তে স্বাগতম! সংবাদের সত্যতা যাচাই করতে কোনো টেক্সট বা ছবি (Image) পাঠান।")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_text = update.message.text.strip()
-    
-    # অতি সংক্ষিপ্ত মেসেজের জন্য ইউজারকে গাইড করা
-    if len(user_text) < 5:
-        await update.message.reply_text(
-            "👋 হাই! সংবাদের সত্যতা যাচাই করতে অন্তত ৫ অক্ষরের কোনো খবরের দাবি লিখে পাঠান।\n\n"
-            "📌 *উদাহরণ:* `বাংলাদেশে আগামী রবিবার ১০ দিনের সরকারি ছুটি ঘোষণা করা হয়েছে।`",
-            parse_mode="Markdown"
-        )
-        return
-
-    # প্রসেসিং মেসেজ দেখানো
-    processing_msg = await update.message.reply_text("🔍 *তথ্য যাচাই করা হচ্ছে, একটু অপেক্ষা করুন...*", parse_mode="Markdown")
+    user_text = update.message.text
+    processing_msg = await update.message.reply_text("🔍 তথ্য যাচাই করা হচ্ছে, একটু অপেক্ষা করুন...")
     
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(API_URL, json={"claim": user_text, "language": "bn"})
+        async with httpx.AsyncClient() as client:
+            response = await client.post(API_URL_TEXT, json={"claim": user_text}, timeout=30.0)
             
         if response.status_code == 200:
             data = response.json()
-            
             verdict = data.get("verdict", "অজানা")
             trust_score = data.get("trust_score", 0)
             explanation = data.get("explanation", "কোনো ব্যাখ্যা পাওয়া যায়নি।")
-            sources = data.get("sources", [])
-
-            # সুন্দর করে মার্কডাউন ফরম্যাটে ইউজারকে রেসপন্স দেওয়া
+            
             final_reply = (
-                f"🏷️ *ফলাফল:* {verdict}\n"
-                f"📊 *ট্রাস্ট স্কোর:* {trust_score}%\n\n"
-                f"💡 *ব্যাখ্যা:* {explanation}\n\n"
+                f"✅ **ফলাফল:** {verdict}\n"
+                f"📊 **ট্রাস্ট স্কোর:** {trust_score}%\n\n"
+                f"📝 **ব্যাখ্যা:** {explanation}"
             )
-            if sources:
-                final_reply += "🔗 *প্রমাণের উৎস:*\n"
-                for idx, s in enumerate(sources[:3], 1):
-                    title = s.get("title", "সোর্স")
-                    url = s.get("url", "#")
-                    final_reply += f"{idx}. [{title}]({url})\n"
-
-            await processing_msg.edit_text(final_reply, parse_mode="Markdown", disable_web_page_preview=True)
+            await processing_msg.edit_text(final_reply)
         else:
-            error_detail = response.json().get("detail", "যাচাইকরণে সমস্যা হয়েছে।")
-            await processing_msg.edit_text(f"⚠️ {error_detail}")
+            await processing_msg.edit_text("⚠️ ব্যাকএন্ড সার্ভার থেকে কোনো উত্তর পাওয়া যায়নি!")
             
     except Exception as e:
-        print(f"[Bot Error] {e}")
-        await processing_msg.edit_text("❌ এরর: ব্যাকএন্ড সার্ভারের সাথে কানেক্ট করা যাচ্ছে না। নিশ্চিত করুন `python main.py` চালু আছে।")
+        await processing_msg.edit_text("❌ এরর: সার্ভারের সাথে কানেক্ট করা যাচ্ছে না।")
+
+# 🔹 নতুন যুক্ত করা ফাংশন: ছবি রিসিভ ও প্রসেস করা
+async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    processing_msg = await update.message.reply_text("📸 ছবি বিশ্লেষণ করা হচ্ছে, একটু অপেক্ষা করুন...")
+    
+    try:
+        # টেলিগ্রাম থেকে সবচেয়ে ভালো রেজুলেশনের ছবিটি নেওয়া ([-1] মানে সবচেয়ে বড় সাইজ)
+        photo_file = await update.message.photo[-1].get_file()
+        
+        # ছবিটিকে মেমরিতে বাইট (bytes) হিসেবে ডাউনলোড করা
+        image_bytes = await photo_file.download_as_bytearray()
+        
+        # বাইট ডেটাকে একটি ভার্চুয়াল ফাইলে (file-like object) রূপান্তর করা
+        image_stream = io.BytesIO(image_bytes)
+        
+        # ব্যাকএন্ডে ছবিটি পাঠানো
+        async with httpx.AsyncClient() as client:
+            # File পাঠানোর জন্য 'files' প্যারামিটার ব্যবহার করতে হয়
+            files = {'file': ('image.jpg', image_stream, 'image/jpeg')}
+            response = await client.post(API_URL_IMAGE, files=files, timeout=30.0)
+            
+        if response.status_code == 200:
+            data = response.json()
+            verdict = data.get("verdict", "অজানা")
+            trust_score = data.get("trust_score", 0)
+            explanation = data.get("explanation", "কোনো ব্যাখ্যা পাওয়া যায়নি।")
+            
+            final_reply = (
+                f"🔍 **ছবি বিশ্লেষণ ফলাফল:**\n\n"
+                f"✅ **রায়:** {verdict}\n"
+                f"📊 **ট্রাস্ট স্কোর:** {trust_score}%\n\n"
+                f"📝 **ব্যাখ্যা:** {explanation}"
+            )
+            await processing_msg.edit_text(final_reply)
+        else:
+            await processing_msg.edit_text("⚠️ ব্যাকএন্ড সার্ভার ছবিটি প্রসেস করতে পারেনি!")
+            
+    except Exception as e:
+        print(f"Bot Image Error: {e}")
+        await processing_msg.edit_text("❌ এরর: সার্ভারের সাথে কানেক্ট করা যাচ্ছে না বা ছবিটি পড়া যাচ্ছে না।")
 
 if __name__ == "__main__":
-    if not TOKEN or len(TOKEN.strip()) < 10 or TOKEN.startswith("your_"):
-        print("\n" + "="*60)
-        print("❌ [এরর] টেলিগ্রাম বট টোকেন পাওয়া যায়নি!")
-        print("="*60)
-        print("বটটি চালু করতে আপনার `.env` ফাইলে একটি সঠিক Telegram Bot Token বসাতে হবে।")
-        print("\n🔑 যেভাবে ১ মিনিটে টেলিগ্রাম বটের টোকেন পাবেন:")
-        print("১. টেলিগ্রাম অ্যাপে গিয়ে সার্চ করুন: @BotFather (অথবা https://t.me/BotFather লিংকে যান)")
-        print("২. /newbot লিখে আপনার বটের একটি নাম ও ইউজারনেম দিন।")
-        print("৩. BotFather আপনাকে একটি টোকেন দেবে (যেমন: 123456789:ABCdefGHI...)")
-        print("৪. প্রজেক্টের `.env` ফাইলটিতে এই লাইনটি যুক্ত করুন:")
-        print("   TELEGRAM_BOT_TOKEN=আপনার_টোকেনটি_এখানে_বসাবেন")
-        print("="*60 + "\n")
-    else:
-        print("Telegram Bot is starting...")
-        app = Application.builder().token(TOKEN).build()
-
-        app.add_handler(CommandHandler("start", start))
-        app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-
-        print("Bot is running! Press Ctrl+C to stop.")
-        app.run_polling()
+    print("Telegram Bot is starting...")
+    # 🔹 টাইম-আউট লিমিট বাড়িয়ে দেওয়া হয়েছে
+    app = Application.builder().token(TOKEN).connect_timeout(60.0).read_timeout(60.0).build()
+    
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+    
+    print("Bot is running! Press Ctrl+C to stop.")
+    # 🔹 বকেয়া বা আটকে থাকা মেসেজ ড্রপ করে ফ্রেশ স্টার্ট করবে
+    app.run_polling(drop_pending_updates=True)
