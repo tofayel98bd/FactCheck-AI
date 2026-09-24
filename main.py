@@ -1,4 +1,5 @@
 import os
+import threading
 from datetime import datetime
 from fastapi import FastAPI, HTTPException, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,6 +8,9 @@ from dotenv import load_dotenv
 from models.schemas import FactCheckRequest, FactCheckResponse
 from services.search import search_web
 from services.ai_engine import analyze_claim_with_rag, analyze_image_with_ai
+
+# বট রান করার ফাংশনটি ইম্পোর্ট করা হলো
+from bot_handler.bot import run_bot
 
 # Load environment variables from .env file
 load_dotenv()
@@ -25,6 +29,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 🔹 FastAPI সার্ভার চালু হওয়ার সাথে সাথে বটকেও ব্যাকগ্রাউন্ড থ্রেডে চালু করার নির্দেশ
+@app.on_event("startup")
+def startup_event():
+    bot_thread = threading.Thread(target=run_bot, daemon=True)
+    bot_thread.start()
+    print("Telegram Bot Thread Started successfully!")
 
 @app.get("/", tags=["Health"])
 def root():
@@ -58,11 +69,11 @@ async def verify_fact(request: FactCheckRequest):
         timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     )
 
-# 🔹 নতুন যুক্ত করা অংশ: ছবি যাচাই করার এন্ডপয়েন্ট
+# 🔹 ছবি যাচাই করার এন্ডপয়েন্ট
 @app.post("/api/verify-image", response_model=FactCheckResponse, tags=["Fact Check - Image"])
 async def verify_image(file: UploadFile = File(...)):
     """
-    ইউজারের দেওয়া ছবি গ্রহণ করে AI দিয়ে বিশ্লেষণ করার রাউট।
+    ইউজারের দেওয়া ছবি গ্রহণ করে AI দিয়ে বিশ্লেষণ করার রাউট।
     """
     image_bytes = await file.read()
     
