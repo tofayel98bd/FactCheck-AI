@@ -1,5 +1,4 @@
 import os
-# import threading
 from datetime import datetime
 from fastapi import FastAPI, HTTPException, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,10 +8,6 @@ from models.schemas import FactCheckRequest, FactCheckResponse
 from services.search import search_web
 from services.ai_engine import analyze_claim_with_rag, analyze_image_with_ai
 
-# বট রান করার ফাংশনটি ইম্পোর্ট করা হলো
-# from bot_handler.bot import run_bot
-
-# Load environment variables from .env file
 load_dotenv()
 
 app = FastAPI(
@@ -21,21 +16,14 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Enable CORS for frontend & bot integrations
+# 🔹 CORS ফিক্স করা হয়েছে
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False, # এটি False করা হয়েছে
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# 🔹 FastAPI সার্ভার চালু হওয়ার সাথে সাথে বটকেও ব্যাকগ্রাউন্ড থ্রেডে চালু করার নির্দেশ
-# @app.on_event("startup")
-#def startup_event():
-#    bot_thread = threading.Thread(target=run_bot, daemon=True)
-#    bot_thread.start()
-#    print("Telegram Bot Thread Started successfully!")
 
 @app.get("/", tags=["Health"])
 def root():
@@ -69,12 +57,8 @@ async def verify_fact(request: FactCheckRequest):
         timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     )
 
-# 🔹 ছবি যাচাই করার এন্ডপয়েন্ট
 @app.post("/api/verify-image", response_model=FactCheckResponse, tags=["Fact Check - Image"])
 async def verify_image(file: UploadFile = File(...)):
-    """
-    ইউজারের দেওয়া ছবি গ্রহণ করে AI দিয়ে বিশ্লেষণ করার রাউট।
-    """
     image_bytes = await file.read()
     
     verdict, trust_score, explanation = await analyze_image_with_ai(image_bytes)
@@ -92,4 +76,3 @@ if __name__ == "__main__":
     import uvicorn
     port = int(os.getenv("PORT", 8000))
     uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)
-    

@@ -1,5 +1,8 @@
 import React, { useState, useRef } from 'react';
 
+// ⚠️ নিচে 127.0.0.1 এর বদলে তোমার Render এর ব্যাকএন্ড লিংকটি বসাও (যেমন: https://factcheck-backend.onrender.com)
+const API_BASE_URL = 'https://factcheck-ai-8xx6.onrender.com'; 
+
 function App() {
   const [claim, setClaim] = useState('');
   const [imageFile, setImageFile] = useState(null);
@@ -13,7 +16,7 @@ function App() {
     const file = e.target.files[0];
     if (file) {
       setImageFile(file);
-      setClaim(''); // ছবি দিলে টেক্সট ক্লিয়ার হয়ে যাবে
+      setClaim(''); // ছবি দিলে টেক্সট ক্লিয়ার হয়ে যাবে
     }
   };
 
@@ -43,19 +46,19 @@ function App() {
     try {
       let response;
       
-      // যদি ছবি আপলোড করা হয়
+      // যদি ছবি আপলোড করা হয়
       if (imageFile) {
         const formData = new FormData();
         formData.append('file', imageFile);
 
-        response = await fetch('http://127.0.0.1:8000/api/verify-image', {
+        response = await fetch(`${API_BASE_URL}/api/verify-image`, {
           method: 'POST',
-          body: formData, // FormData পাঠালে Content-Type নিজে থেকে সেট হয়ে যায়
+          body: formData, 
         });
       } 
-      // যদি শুধু টেক্সট দেওয়া হয়
+      // যদি শুধু টেক্সট দেওয়া হয়
       else {
-        response = await fetch('http://127.0.0.1:8000/api/verify-fact', {
+        response = await fetch(`${API_BASE_URL}/api/verify-fact`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ claim: claim, language: 'bn' }),
@@ -70,7 +73,7 @@ function App() {
 
       setResult(data);
     } catch (err) {
-      setError(err.message || 'নেটওয়ার্ক বা সার্ভার এরর। ব্যাকএন্ড চালু আছে কি না চেক করুন।');
+      setError(err.message || 'নেটওয়ার্ক বা সার্ভার এরর। ব্যাকএন্ড চালু আছে কি না চেক করুন।');
     } finally {
       setLoading(false);
     }
@@ -174,8 +177,6 @@ function App() {
                 {result.explanation}
               </p>
             </div>
-            
-            {/* Sources section removed for image results as it's purely AI analysis */}
           </div>
         )}
       </div>
