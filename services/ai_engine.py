@@ -42,8 +42,8 @@ async def analyze_claim_with_rag(claim: str, sources: List[SourceItem], language
 {evidence_text}
 
 [আপনার কাজ ও কঠোর নির্দেশ (ZERO HALLUCINATION RULES)]:
-১. **শুধুমাত্র** উপরে দেওয়া "ভেরিফায়েড তথ্যপ্রমাণ"-এর ভিত্তিতে উত্তর দিন। নিজে থেকে কোনো তথ্য বানাবেন না বা পূর্বের মেমরি (Training Data) ব্যবহার করবেন না।
-২. যদি দেওয়া তথ্যপ্রমাণের মধ্যে দাবিটি যাচাই করার মতো পর্যাপ্ত তথ্য না থাকে, তবে অবশ্যই "অনিশ্চিত (Unverified)" লেবেল দিন এবং ব্যাখ্যায় লিখুন "এই দাবিটি যাচাই করার জন্য নির্ভরযোগ্য সংবাদমাধ্যমে কোনো তথ্য পাওয়া যায়নি।"
+১. **শুধুমাত্র** উপরে দেওয়া "ভেরিফায়েড তথ্যপ্রমাণ"-এর ভিত্তিতে উত্তর দিন। নিজে থেকে কোনো তথ্য বানাবেন না বা পূর্বের মেমরি (Training Data) ব্যবহার করবেন না।
+২. যদি দেওয়া তথ্যপ্রমাণের মধ্যে দাবিটি যাচাই করার মতো পর্যাপ্ত তথ্য না থাকে, তবে অবশ্যই "অনিশ্চিত (Unverified)" লেবেল দিন এবং ব্যাখ্যায় লিখুন "এই দাবিটি যাচাই করার জন্য নির্ভরযোগ্য সংবাদমাধ্যমে কোনো তথ্য পাওয়া যায়নি।"
 ৩. সময় যাচাই (Time-matching): 
    - ইউজারের দাবিতে যদি কোনো তারিখ বা সময় (যেমন: আজ, গতকাল, অমুক তারিখ) উল্লেখ থাকে, তবে সোর্সে থাকা আসল ঘটনার তারিখের সাথে সেটি মেলান।
    - ঘটনাটি যদি পুরোনো হয় কিন্তু ইউজার একে "আজকের" বা "সাম্প্রতিক" বলে দাবি করে, তবে একে "বিভ্রান্তিকর (Misleading)" লেবেল দিন এবং আসল তারিখটি জানিয়ে দিন। 
@@ -61,7 +61,11 @@ async def analyze_claim_with_rag(claim: str, sources: List[SourceItem], language
     if not gemini_key or gemini_key.startswith("your_"):
          return VerdictEnum.UNVERIFIED, 50, "API Key সেট করা নেই।"
 
-    models_to_try = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash"] # Added newer models
+    models_to_try = [
+        "gemini-3.8-flash",
+        "gemini-3.7-flash",
+        "gemini-3.6-flash"
+    ]
 
     async with httpx.AsyncClient() as client:
         for model_name in models_to_try:
@@ -95,7 +99,7 @@ async def analyze_claim_with_rag(claim: str, sources: List[SourceItem], language
                     else:
                         finish_reason = candidate.get("finishReason", "Unknown")
                         print(f"⚠️ Content Blocked. Reason: {finish_reason}")
-                        return VerdictEnum.UNVERIFIED, 0, f"এআই সুরক্ষানীতি (Safety Policy) বা অন্য কারণে উত্তর দিতে পারছে না। (Reason: {finish_reason})"
+                        return VerdictEnum.UNVERIFIED, 0, f"এআই সুরক্ষানীতি (Safety Policy) বা অন্য কারণে উত্তর দিতে পারছে গঠন। (Reason: {finish_reason})"
                 else:
                     print(f"❌ API Error ({model_name}): {res.status_code} - {res.text}")
             except Exception as e:
@@ -129,7 +133,7 @@ async def analyze_image_with_ai(image_bytes: bytes) -> tuple[VerdictEnum, int, s
         
         async with httpx.AsyncClient() as client:
             res = await client.post(
-                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={gemini_key}",
+                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key={gemini_key}",
                 headers={"Content-Type": "application/json"},
                 json={
                     "contents": [{
