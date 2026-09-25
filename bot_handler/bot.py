@@ -101,7 +101,7 @@ def run_bot():
         
         print("Bot is running! Press Ctrl+C to stop.")
         # বকেয়া বা আটকে থাকা মেসেজ ড্রপ করে ফ্রেশ স্টার্ট করবে
-        app.run_polling(drop_pending_updates=True)
+        app.run_polling(drop_pending_updates=True, stop_signals=None)
     except Exception as e:
         print(f"Bot Background Error: {e}")
 
