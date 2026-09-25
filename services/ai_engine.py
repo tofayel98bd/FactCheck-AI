@@ -41,27 +41,27 @@ async def analyze_claim_with_rag(claim: str, sources: List[SourceItem], language
 [ভেরিফায়েড তথ্যপ্রমাণ (RAG Evidence)]:
 {evidence_text}
 
-[আপনার কাজ ও কঠোর নির্দেশ (STRICT RULES)]:
-১. শুধুমাত্র দেওয়া তথ্যপ্রমাণের ভিত্তিতে উত্তর দিন। নিজে থেকে কিছু বানাবেন বা গঠন করবেন না।
-২. সময় যাচাই (Time-matching): 
+[আপনার কাজ ও কঠোর নির্দেশ (ZERO HALLUCINATION RULES)]:
+১. **শুধুমাত্র** উপরে দেওয়া "ভেরিফায়েড তথ্যপ্রমাণ"-এর ভিত্তিতে উত্তর দিন। নিজে থেকে কোনো তথ্য বানাবেন না বা পূর্বের মেমরি (Training Data) ব্যবহার করবেন না।
+২. যদি দেওয়া তথ্যপ্রমাণের মধ্যে দাবিটি যাচাই করার মতো পর্যাপ্ত তথ্য না থাকে, তবে অবশ্যই "অনিশ্চিত (Unverified)" লেবেল দিন এবং ব্যাখ্যায় লিখুন "এই দাবিটি যাচাই করার জন্য নির্ভরযোগ্য সংবাদমাধ্যমে কোনো তথ্য পাওয়া যায়নি।"
+৩. সময় যাচাই (Time-matching): 
    - ইউজারের দাবিতে যদি কোনো তারিখ বা সময় (যেমন: আজ, গতকাল, অমুক তারিখ) উল্লেখ থাকে, তবে সোর্সে থাকা আসল ঘটনার তারিখের সাথে সেটি মেলান।
    - ঘটনাটি যদি পুরোনো হয় কিন্তু ইউজার একে "আজকের" বা "সাম্প্রতিক" বলে দাবি করে, তবে একে "বিভ্রান্তিকর (Misleading)" লেবেল দিন এবং আসল তারিখটি জানিয়ে দিন। 
    - যদি ইউজারের দাবিতে কোনো সময় বা তারিখ উল্লেখ না থাকে, তবে ব্যাখ্যায় অবশ্যই জানিয়ে দিন ঘটনাটি আসলে কবে ঘটেছিল।
-৩. যদি তথ্যপ্রমাণে দাবিটি পুরোপুরি মিথ্যা প্রমাণিত হয়, তবে "মিথ্যা (Fake)" দিন।
-৪. যদি পর্যাপ্ত তথ্য না পাওয়া যায়, তবে "অনিশ্চিত (Unverified)" দিন।
+৪. যদি তথ্যপ্রমাণে দাবিটি পুরোপুরি মিথ্যা প্রমাণিত হয়, তবে "মিথ্যা (Fake)" দিন।
 
 আউটপুট অবশ্যই নিচের JSON ফরম্যাটে দিন:
 {{
-  "verdict": "সত্য (True)",
-  "trust_score": 80,
-  "explanation": "১-৩ বাক্যে ব্যাখ্যা। তারিখের অমিল থাকলে বা ঘটনাটি পুরোনো হলে অবশ্যই আসল তারিখ উল্লেখ করবেন। সোর্সের নাম যুক্ত করবেন।"
+  "verdict": "সত্য (True)" | "মিথ্যা (Fake)" | "বিভ্রান্তিকর (Misleading)" | "অনিশ্চিত (Unverified)",
+  "trust_score": 0 থেকে 100 এর মধ্যে সংখ্যা (অনিশ্চিত হলে 0 হবে),
+  "explanation": "১-৩ বাক্যে ব্যাখ্যা। তারিখের অমিল থাকলে বা ঘটনাটি পুরোনো হলে অবশ্যই আসল তারিখ উল্লেখ করবেন। সোর্সের নাম এবং ইউআরএল যুক্ত করবেন।"
 }}
     """
 
     if not gemini_key or gemini_key.startswith("your_"):
          return VerdictEnum.UNVERIFIED, 50, "API Key সেট করা নেই।"
 
-    models_to_try = ["gemini-1.5-flash", "gemini-1.5-pro"]
+    models_to_try = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash"] # Added newer models
 
     async with httpx.AsyncClient() as client:
         for model_name in models_to_try:
@@ -95,13 +95,13 @@ async def analyze_claim_with_rag(claim: str, sources: List[SourceItem], language
                     else:
                         finish_reason = candidate.get("finishReason", "Unknown")
                         print(f"⚠️ Content Blocked. Reason: {finish_reason}")
-                        return VerdictEnum.UNVERIFIED, 50, f"এআই সুরক্ষানীতি (Safety Policy) বা অন্য কারণে উত্তর দিতে পারছে না। (Reason: {finish_reason})"
+                        return VerdictEnum.UNVERIFIED, 0, f"এআই সুরক্ষানীতি (Safety Policy) বা অন্য কারণে উত্তর দিতে পারছে না। (Reason: {finish_reason})"
                 else:
                     print(f"❌ API Error ({model_name}): {res.status_code} - {res.text}")
             except Exception as e:
                 print(f"❌ Connection Error ({model_name}): {e}")
 
-    return VerdictEnum.UNVERIFIED, 50, "API Key ঠিক আছে, কিন্তু এআই মডেলের সাথে কানেক্ট করা যায়নি অথবা সার্ভার ব্যস্ত আছে।"
+    return VerdictEnum.UNVERIFIED, 0, "API Key ঠিক আছে, কিন্তু এআই মডেলের সাথে কানেক্ট করা যায়নি অথবা সার্ভার ব্যস্ত আছে।"
 
 async def analyze_image_with_ai(image_bytes: bytes) -> tuple[VerdictEnum, int, str]:
     gemini_key = os.getenv("GEMINI_API_KEY", "").strip().strip('"').strip("'")
@@ -115,14 +115,14 @@ async def analyze_image_with_ai(image_bytes: bytes) -> tuple[VerdictEnum, int, s
     
     আউটপুট অবশ্যই নিচের JSON ফরম্যাটে দিন:
     {
-      "verdict": "মিথ্যা (Fake)",
-      "trust_score": 10,
+      "verdict": "মিথ্যা (Fake)" | "সত্য (True)" | "অনিশ্চিত (Unverified)",
+      "trust_score": 0-100,
       "explanation": "১-৩ বাক্যে আসল ঘটনা/তারিখ (যদি জানা থাকে) এবং এডিটিং বা অসংগতির বিস্তারিত।"
     }
     """
     
     if not gemini_key or gemini_key.startswith("your_"):
-        return VerdictEnum.UNVERIFIED, 50, "Gemini API Key সেট করা নেই।"
+        return VerdictEnum.UNVERIFIED, 0, "Gemini API Key সেট করা নেই।"
 
     try:
         encoded_image = base64.b64encode(image_bytes).decode('utf-8')
@@ -156,12 +156,12 @@ async def analyze_image_with_ai(image_bytes: bytes) -> tuple[VerdictEnum, int, s
                         parsed = clean_json_response(raw_text)
                         if parsed:
                             return parse_verdict(parsed.get("verdict", "")), int(parsed.get("trust_score", 0)), parsed.get("explanation", "")
-                    else:
-                        finish_reason = candidate.get("finishReason", "Unknown")
-                        return VerdictEnum.UNVERIFIED, 50, f"এআই সুরক্ষানীতি (Safety Policy) বা অন্য কারণে ছবিটি বিশ্লেষণ করতে পারছে না। (Reason: {finish_reason})"
+                else:
+                    finish_reason = candidate.get("finishReason", "Unknown")
+                    return VerdictEnum.UNVERIFIED, 0, f"এআই সুরক্ষানীতি (Safety Policy) বা অন্য কারণে ছবিটি বিশ্লেষণ করতে পারছে না। (Reason: {finish_reason})"
             else:
                 print(f"API Error in Image Analysis: {res.text}")
     except Exception as e:
         print(f"Image Analysis Error: {e}")
         
-    return VerdictEnum.UNVERIFIED, 50, "ছবি যাচাইয়ের সময় সার্ভারে বা এআই-তে সমস্যা হয়েছে।"
+    return VerdictEnum.UNVERIFIED, 0, "ছবি যাচাইয়ের সময় সার্ভারে বা এআই-তে সমস্যা হয়েছে।"

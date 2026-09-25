@@ -3,7 +3,7 @@ import httpx
 from typing import List
 from models.schemas import SourceItem
 
-# ভেরিফায়েড সোর্সের তালিকা (Whitelisting)
+# ভেরিফায়েড সোর্সের তালিকা (Whitelisting)
 TRUSTED_SOURCES = [
     "prothomalo.com", "bdnews24.com", "thedailystar.net", "ntvbd.com", 
     "somoynews.tv", "jamuna.tv", "independent24.com", "ittefaq.com.bd", 
@@ -47,7 +47,6 @@ async def search_web(query: str, max_results: int = 5) -> List[SourceItem]:
                         "num": fetch_limit,
                         "gl": "bd",
                         "hl": "bn"
-                        # Time filter রিমুভ করা হয়েছে!
                     },
                     timeout=10.0
                 )
@@ -58,6 +57,7 @@ async def search_web(query: str, max_results: int = 5) -> List[SourceItem]:
                     
                     for item in organic_results:
                         link = item.get("link", "").lower()
+                        # Strict whitelisting match
                         if any(domain in link for domain in TRUSTED_SOURCES):
                             sources.append(SourceItem(
                                 title=item.get("title", "No Title"),
@@ -81,7 +81,6 @@ async def search_web(query: str, max_results: int = 5) -> List[SourceItem]:
                         "cx": google_cx,
                         "q": query,
                         "num": fetch_limit if fetch_limit <= 10 else 10
-                        # Time filter রিমুভ করা হয়েছে!
                     },
                     timeout=10.0
                 )
@@ -92,6 +91,7 @@ async def search_web(query: str, max_results: int = 5) -> List[SourceItem]:
                     
                     for item in items:
                         link = item.get("link", "").lower()
+                        # Strict whitelisting match
                         if any(domain in link for domain in TRUSTED_SOURCES):
                             sources.append(SourceItem(
                                 title=item.get("title", "No Title"),
