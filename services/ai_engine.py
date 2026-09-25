@@ -8,7 +8,6 @@ from models.schemas import VerdictEnum, SourceItem, FactCheckResponse
 from datetime import datetime
 
 def clean_json_response(text: str) -> dict:
-    """Gemini থেকে আসা রেসপন্সের ভেতরে থাকা JSON বের করে আনার ফাংশন"""
     text = text.strip()
     match = re.search(r'\{.*\}', text, re.DOTALL)
     if match:
@@ -63,32 +62,40 @@ async def analyze_claim_with_rag(claim: str, sources: List[SourceItem], language
          return VerdictEnum.UNVERIFIED, 50, "API Key সেট করা নেই।"
 
     models_to_try = ["gemini-1.5-flash", "gemini-1.5-pro"]
-    headers = {
-        "x-goog-api-key": gemini_key,
-        "Content-Type": "application/json"
-    }
 
     async with httpx.AsyncClient() as client:
         for model_name in models_to_try:
             try:
                 res = await client.post(
-                    f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent",
-                    headers=headers,
+                    f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={gemini_key}",
+                    headers={"Content-Type": "application/json"},
                     json={
                         "contents": [{"parts": [{"text": prompt}]}],
-                        "generationConfig": {"response_mime_type": "application/json"}
+                        "generationConfig": {"responseMimeType": "application/json"}
                     }, 
                     timeout=30.0
                 )
                 if res.status_code == 200:
-                    raw_text = res.json()["candidates"][0]["content"]["parts"][0]["text"]
-                    parsed = clean_json_response(raw_text)
-                    
-                    if parsed:
-                        verdict_val = parsed.get("verdict", "")
-                        trust_score = int(parsed.get("trust_score", 0))
-                        explanation = parsed.get("explanation", "কোনো ব্যাখ্যা পাওয়া যায়নি।")
-                        return parse_verdict(verdict_val), trust_score, explanation
+                    data = res.json()
+                    candidates = data.get("candidates", [])
+                    if not candidates:
+                        print(f"❌ API Error: No candidates returned. {data}")
+                        continue
+                        
+                    candidate = candidates[0]
+                    if "content" in candidate and "parts" in candidate["content"]:
+                        raw_text = candidate["content"]["parts"][0]["text"]
+                        parsed = clean_json_response(raw_text)
+                        
+                        if parsed:
+                            verdict_val = parsed.get("verdict", "")
+                            trust_score = int(parsed.get("trust_score", 0))
+                            explanation = parsed.get("explanation", "কোনো ব্যাখ্যা পাওয়া যায়নি।")
+                            return parse_verdict(verdict_val), trust_score, explanation
+                    else:
+                        finish_reason = candidate.get("finishReason", "Unknown")
+                        print(f"⚠️ Content Blocked. Reason: {finish_reason}")
+                        return VerdictEnum.UNVERIFIED, 50, f"এআই সুরক্ষানীতি (Safety Policy) বা অন্য কারণে উত্তর দিতে পারছে না। (Reason: {finish_reason})"
                 else:
                     print(f"❌ API Error ({model_name}): {res.status_code} - {res.text}")
             except Exception as e:
@@ -117,18 +124,13 @@ async def analyze_image_with_ai(image_bytes: bytes) -> tuple[VerdictEnum, int, s
     if not gemini_key or gemini_key.startswith("your_"):
         return VerdictEnum.UNVERIFIED, 50, "Gemini API Key সেট করা নেই।"
 
-    headers = {
-        "x-goog-api-key": gemini_key,
-        "Content-Type": "application/json"
-    }
-
     try:
         encoded_image = base64.b64encode(image_bytes).decode('utf-8')
         
         async with httpx.AsyncClient() as client:
             res = await client.post(
-                "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent",
-                headers=headers,
+                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={gemini_key}",
+                headers={"Content-Type": "application/json"},
                 json={
                     "contents": [{
                         "parts": [
@@ -141,15 +143,22 @@ async def analyze_image_with_ai(image_bytes: bytes) -> tuple[VerdictEnum, int, s
                             }
                         ]
                     }],
-                    "generationConfig": {"response_mime_type": "application/json"}
+                    "generationConfig": {"responseMimeType": "application/json"}
                 }, timeout=30.0
             )
             if res.status_code == 200:
-                raw_text = res.json()["candidates"][0]["content"]["parts"][0]["text"]
-                parsed = clean_json_response(raw_text)
-                
-                if parsed:
-                    return parse_verdict(parsed.get("verdict", "")), int(parsed.get("trust_score", 0)), parsed.get("explanation", "")
+                data = res.json()
+                candidates = data.get("candidates", [])
+                if candidates:
+                    candidate = candidates[0]
+                    if "content" in candidate and "parts" in candidate["content"]:
+                        raw_text = candidate["content"]["parts"][0]["text"]
+                        parsed = clean_json_response(raw_text)
+                        if parsed:
+                            return parse_verdict(parsed.get("verdict", "")), int(parsed.get("trust_score", 0)), parsed.get("explanation", "")
+                    else:
+                        finish_reason = candidate.get("finishReason", "Unknown")
+                        return VerdictEnum.UNVERIFIED, 50, f"এআই সুরক্ষানীতি (Safety Policy) বা অন্য কারণে ছবিটি বিশ্লেষণ করতে পারছে না। (Reason: {finish_reason})"
             else:
                 print(f"API Error in Image Analysis: {res.text}")
     except Exception as e:
